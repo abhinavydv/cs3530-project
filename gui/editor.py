@@ -1,4 +1,6 @@
 import gi
+import uuid
+import hashlib
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
@@ -10,7 +12,8 @@ class TextEditWindow(Gtk.Window):
     def __init__(self, parent):
         super().__init__(title="Text Editor", transient_for=parent, modal=True)
 
-        self.curr_file = None
+        self.file_name = None
+        self.link = None
         self.IP = self.getIP()
 
         self.set_default_size(650, 350)
@@ -18,16 +21,18 @@ class TextEditWindow(Gtk.Window):
 
         self.add(self.grid)
 
-        self.create_textview()
         self.create_menubar()
-        
+        self.create_textview()
+
     def getIP(self):
         """
             Get the IP address of the current host
         """
         s = socket(AF_INET, SOCK_DGRAM)
-        s.connect(("10.255.255.255", 1234))
-        return s.getsockname()[0]
+        s.connect(("10.43.45.3", 1234))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
 
     def create_textview(self):
         """
@@ -40,10 +45,11 @@ class TextEditWindow(Gtk.Window):
 
         self.textview = Gtk.TextView()
         self.textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.textview.set_sensitive(False)
         self.textbuffer = self.textview.get_buffer()
-        self.textbuffer.set_text("This is some text inside of a Gtk.TextView. "
-                                 + "Select text and click one of the buttons 'bold', 'italic', "
-                                 + "or 'underline' to modify the text accordingly.")
+        # self.textbuffer.set_text("This is some text inside of a Gtk.TextView. "
+        #                          + "Select text and click one of the buttons 'bold', 'italic', "
+        #                          + "or 'underline' to modify the text accordingly.")
 
         sw.add(self.textview)
 
@@ -51,34 +57,35 @@ class TextEditWindow(Gtk.Window):
         """
             Create a menubar and add it to the grid
         """
-        menu_bar = Gtk.MenuBar()
-        self.grid.attach(menu_bar, 0, 0, 1, 1)
-        
-        file_menu = Gtk.Menu()
-        file_menu_item = Gtk.MenuItem(label="File")
+        self.menu_bar = Gtk.MenuBar()
+        self.grid.attach(self.menu_bar, 0, 0, 1, 1)
 
-        file_menu_item.set_submenu(file_menu)
-        menu_bar.append(file_menu_item)
+        self.file_menu = Gtk.Menu()
+        self.file_menu_item = Gtk.MenuItem(label="File")
 
-        new_file_item = Gtk.MenuItem(label="New")
-        file_menu.append(new_file_item)
-        new_file_item.connect("activate", self.new_file)
+        self.file_menu_item.set_submenu(self.file_menu)
+        self.menu_bar.append(self.file_menu_item)
 
-        open_file_item = Gtk.MenuItem(label="Open")
-        file_menu.append(open_file_item)
-        open_file_item.connect("activate", self.open_file)
-        
-        share_file_item = Gtk.MenuItem(label="Share")
-        file_menu.append(share_file_item)
-        share_file_item.connect("activate", self.share_file)
+        self.new_file_item = Gtk.MenuItem(label="New")
+        self.file_menu.append(self.new_file_item)
+        self.new_file_item.connect("activate", self.new_file)
 
-        connect_file_item = Gtk.MenuItem(label="Connect")
-        file_menu.append(connect_file_item)
-        connect_file_item.connect("activate", self.connect_file)
+        self.open_file_item = Gtk.MenuItem(label="Open")
+        self.file_menu.append(self.open_file_item)
+        self.open_file_item.connect("activate", self.open_file)
 
-        exit_file_item = Gtk.MenuItem(label="Exit")
-        file_menu.append(exit_file_item)
-        exit_file_item.connect("activate", self.exit_app)
+        self.share_file_item = Gtk.MenuItem(label="Share")
+        self.file_menu.append(self.share_file_item)
+        self.share_file_item.set_sensitive(False)
+        self.share_file_item.connect("activate", self.share_file)
+
+        self.connect_file_item = Gtk.MenuItem(label="Connect")
+        self.file_menu.append(self.connect_file_item)
+        self.connect_file_item.connect("activate", self.connect_file)
+
+        self.exit_file_item = Gtk.MenuItem(label="Exit")
+        self.file_menu.append(self.exit_file_item)
+        self.exit_file_item.connect("activate", self.exit_app)
 
     def new_file(self, _):
         """
@@ -87,7 +94,7 @@ class TextEditWindow(Gtk.Window):
         self.file_dialog = Gtk.FileChooserDialog(
             title="Choose a file", parent=self, action=Gtk.FileChooserAction.SAVE
         )
-        
+
         self.file_dialog.add_buttons(
             Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, "Create File", Gtk.ResponseType.OK
         )
@@ -103,6 +110,9 @@ class TextEditWindow(Gtk.Window):
         elif self.response == Gtk.ResponseType.CANCEL:
             print("Cancel clicked")
 
+        if self.file_name is None:
+            self.textview.set_sensitive(True)
+            self.share_file_item.set_sensitive(True)
         self.file_dialog.destroy()
 
     def open_file(self, _):
@@ -128,6 +138,9 @@ class TextEditWindow(Gtk.Window):
 
         elif self.response == Gtk.ResponseType.CANCEL:
             print("Cancel clicked")
+        if self.file_name is not None:
+            self.textview.set_sensitive(True)
+            self.share_file_item.set_sensitive(True)
         self.file_dialog.destroy()
 
     def connect_file(self, _):
@@ -164,12 +177,17 @@ class TextEditWindow(Gtk.Window):
         """
             Generate a link to share the file
         """
+        self.uuid = uuid.getnode()
+        link = f"{self.IP}::{hashlib.sha256(self.uuid.to_bytes(48))}::{self.file_name}"
+        
+        return link
 
     def share_file(self, _):
         """
             Share a file
         """
         link = self.generate_link()
+        print(link)
 
     def exit_app(self, _):
         """
