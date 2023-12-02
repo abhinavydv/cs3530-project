@@ -14,6 +14,7 @@ class TextEditWindow(Gtk.Window):
 
         self.file_name = None
         self.link = None
+        self.uuid = uuid.getnode().to_bytes(6, "little")
         self.IP = self.getIP()
 
         self.set_default_size(650, 350)
@@ -110,9 +111,10 @@ class TextEditWindow(Gtk.Window):
         elif self.response == Gtk.ResponseType.CANCEL:
             print("Cancel clicked")
 
-        if self.file_name is None:
+        if self.file_name is not None:
             self.textview.set_sensitive(True)
             self.share_file_item.set_sensitive(True)
+            self.link = self.generate_link()
         self.file_dialog.destroy()
 
     def open_file(self, _):
@@ -139,6 +141,7 @@ class TextEditWindow(Gtk.Window):
         elif self.response == Gtk.ResponseType.CANCEL:
             print("Cancel clicked")
         if self.file_name is not None:
+            self.link = self.generate_link()
             self.textview.set_sensitive(True)
             self.share_file_item.set_sensitive(True)
         self.file_dialog.destroy()
@@ -167,7 +170,7 @@ class TextEditWindow(Gtk.Window):
 
         if self.response == Gtk.ResponseType.OK:
             self.link = self.entry.get_text()
-            print(self.link)
+            # print(self.link)
         else:
             pass
 
@@ -177,17 +180,36 @@ class TextEditWindow(Gtk.Window):
         """
             Generate a link to share the file
         """
-        self.uuid = uuid.getnode()
-        link = f"{self.IP}::{hashlib.sha256(self.uuid.to_bytes(48))}::{self.file_name}"
-        
+        link = f"{self.IP}::{hashlib.sha256(self.uuid).hexdigest()}::{self.file_name}"
+
         return link
 
     def share_file(self, _):
         """
-            Share a file
+            Show link to share this file.
         """
-        link = self.generate_link()
-        print(link)
+        input_dialog = Gtk.Dialog(
+            title="Share file", parent=self, modal=True
+        )
+        # self.input_dialog.add_buttons(
+        #     Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, "OK", Gtk.ResponseType.OK
+        # )
+
+        box = input_dialog.get_content_area()
+        label = Gtk.Label(label="Share this link:")
+
+        box.add(label)
+        entry = Gtk.TextView()
+        entry.get_buffer().set_text(self.link)
+        entry.set_editable(False)
+        entry.set_wrap_mode(Gtk.WrapMode.WORD)
+        box.add(entry)
+
+        input_dialog.show_all()
+
+        input_dialog.run()
+
+        input_dialog.destroy()
 
     def exit_app(self, _):
         """
