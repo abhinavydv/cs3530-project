@@ -1,9 +1,12 @@
 import gi
 import uuid
 import hashlib
+from time import sleep
+from crdt import CRDT
+
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk,GLib,Gdk
 
 from socket import socket, AF_INET, SOCK_DGRAM
 
@@ -15,6 +18,8 @@ class TextEditWindow(Gtk.Window):
         self.file_name = None
         self.link = None
         self.uuid = uuid.getnode().to_bytes(6, "little")
+        self.timeout = None
+        self.counter = 0
         self.IP = self.getIP()
 
         self.set_default_size(650, 350)
@@ -25,6 +30,8 @@ class TextEditWindow(Gtk.Window):
         self.create_menubar()
         self.create_textview()
 
+        self.setTimeout()
+        
     def getIP(self):
         """
             Get the IP address of the current host
@@ -45,6 +52,8 @@ class TextEditWindow(Gtk.Window):
         self.grid.attach(sw, 0, 1, 1, 1)
 
         self.textview = Gtk.TextView()
+        self.textview.connect("key-press-event", self.on_key_press_event)
+
         self.textview.set_wrap_mode(Gtk.WrapMode.WORD)
         self.textview.set_sensitive(False)
         self.textbuffer = self.textview.get_buffer()
@@ -53,6 +62,23 @@ class TextEditWindow(Gtk.Window):
         #                          + "or 'underline' to modify the text accordingly.")
 
         sw.add(self.textview)
+
+    def on_key_press_event(self,widget,event,*args):
+        if self.counter > 10:
+            # Send the current state of the file to all peers here
+            GLib.source_remove(self.timeout)
+            self.timeout = GLib.timeout_add(1000, self.on_timeout)
+            
+        self.counter += 1
+        print(Gdk.keyval_name(event.keyval))
+        print("Current state : ",self.textbuffer.get_text(self.textbuffer.get_start_iter(), self.textbuffer.get_end_iter(), True))
+        print("Current cursor position: ",self.textbuffer.get_property('cursor-position'))
+    
+    def setTimeout(self):
+        self.timeout = GLib.timeout_add(1000, self.on_timeout)
+
+    def on_timeout(self):
+        print("")
 
     def create_menubar(self):
         """
@@ -221,6 +247,7 @@ class TextEditWindow(Gtk.Window):
         """
             Insert text at the given position
         """
+
 
 
 if __name__ == "__main__":
