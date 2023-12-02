@@ -2,7 +2,7 @@ import gi
 import uuid
 import hashlib
 from time import sleep
-from crdt import CRDT
+from queue import Queue
 
 
 gi.require_version("Gtk", "3.0")
@@ -18,9 +18,11 @@ class TextEditWindow(Gtk.Window):
         self.file_name = None
         self.link = None
         self.uuid = uuid.getnode().to_bytes(6, "little")
-        self.timeout = None
+        self.timeout = GLib.timeout_add(1000, self.on_timeout)
         self.counter = 0
         self.IP = self.getIP()
+        self.queue = Queue(1000)
+        self.last_written = 0
 
         self.set_default_size(650, 350)
         self.grid = Gtk.Grid()
@@ -29,8 +31,6 @@ class TextEditWindow(Gtk.Window):
 
         self.create_menubar()
         self.create_textview()
-
-        self.setTimeout()
         
     def getIP(self):
         """
@@ -52,7 +52,7 @@ class TextEditWindow(Gtk.Window):
         self.grid.attach(sw, 0, 1, 1, 1)
 
         self.textview = Gtk.TextView()
-        self.textview.connect("key-press-event", self.on_key_press_event)
+        self.textview.connect("key-release-event", self.on_key_press_event)
 
         self.textview.set_wrap_mode(Gtk.WrapMode.WORD)
         self.textview.set_sensitive(False)
@@ -64,21 +64,32 @@ class TextEditWindow(Gtk.Window):
         sw.add(self.textview)
 
     def on_key_press_event(self,widget,event,*args):
-        if self.counter > 10:
-            # Send the current state of the file to all peers here
+        cursor_position = self.textbuffer.get_property('cursor-position')
+        text = self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_end_iter(), True)
+
+        if (self.counter > 10):
+            data = [self.last_written,text]
+            self.queue.put(data)
+            self.counter = 0 
+            self.last_written = cursor_position
             GLib.source_remove(self.timeout)
             self.timeout = GLib.timeout_add(1000, self.on_timeout)
+            return
             
         self.counter += 1
         print(Gdk.keyval_name(event.keyval))
-        print("Current state : ",self.textbuffer.get_text(self.textbuffer.get_start_iter(), self.textbuffer.get_end_iter(), True))
-        print("Current cursor position: ",self.textbuffer.get_property('cursor-position'))
-    
-    def setTimeout(self):
-        self.timeout = GLib.timeout_add(1000, self.on_timeout)
+        print("Current state : ",text)
+        print("Current cursor position: ",cursor_position)
 
     def on_timeout(self):
-        print("")
+        data = [self.last_written,self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_end_iter(), True)]
+        self.queue.put(data)
+        self.counter = 0
+        self.last_written = self.textbuffer.get_property('cursor-position')
+
+        GLib.source_remove(self.timeout)
+        self.timeout = GLib.timeout_add(1000, self.on_timeout)
+
 
     def create_menubar(self):
         """
@@ -247,6 +258,14 @@ class TextEditWindow(Gtk.Window):
         """
             Insert text at the given position
         """
+        self.textbuffer.insert(self.textbuffer.get_iter_at_offset(pos), text,len(text))
+        if pos <= self.last_written:
+            self.last_written += len(text)
+        
+        
+        
+
+
 
 
 
