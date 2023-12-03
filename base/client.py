@@ -15,13 +15,3 @@ class Client(Socket):
         self.running = True
         self.connect()
         self.run()
-        
-    def run(self):
-        pass
-    
-    def send_edit(self, diff: str):
-        """
-            Sends the edits to all peers using IGMP
-        """
-
-    
