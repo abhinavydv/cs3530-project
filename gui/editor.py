@@ -3,6 +3,9 @@ import uuid
 import hashlib
 from time import sleep
 from queue import Queue
+from control.control_layer import ControlLayer
+from consistency.crdt_v2 import CRDT
+import threading
 
 
 gi.require_version("Gtk", "3.0")
@@ -15,13 +18,18 @@ class TextEditWindow(Gtk.Window):
     def __init__(self, parent):
         super().__init__(title="Text Editor", transient_for=parent, modal=True)
 
+        self.running = True
+
         self.file_name = None
         self.link = None
         self.uuid = uuid.getnode().to_bytes(6, "little")
+        self.crdt = None
+        self.cl = None
         self.timeout = GLib.timeout_add(1000, self.on_timeout)
         self.counter = 0
         self.IP = self.getIP()
-        self.queue = Queue(1000)
+        self.port = 11419
+        self.queue = Queue()
         self.last_written = 0
 
         self.set_default_size(650, 350)
@@ -31,7 +39,7 @@ class TextEditWindow(Gtk.Window):
 
         self.create_menubar()
         self.create_textview()
-        
+
     def getIP(self):
         """
             Get the IP address of the current host
@@ -41,6 +49,12 @@ class TextEditWindow(Gtk.Window):
         ip = s.getsockname()[0]
         s.close()
         return ip
+
+    def get_cur_pos(self):
+        """
+            Get the current cursor position
+        """
+        return self.textbuffer.get_property('cursor-position')
 
     def create_textview(self):
         """
@@ -75,21 +89,19 @@ class TextEditWindow(Gtk.Window):
             GLib.source_remove(self.timeout)
             self.timeout = GLib.timeout_add(1000, self.on_timeout)
             return
-            
+
         self.counter += 1
-        print(Gdk.keyval_name(event.keyval))
-        print("Current state : ",text)
-        print("Current cursor position: ",cursor_position)
 
     def on_timeout(self):
         data = [self.last_written,self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_end_iter(), True)]
-        self.queue.put(data)
+        if (data[1] != ""):
+            self.queue.put(data)
         self.counter = 0
         self.last_written = self.textbuffer.get_property('cursor-position')
 
         GLib.source_remove(self.timeout)
-        self.timeout = GLib.timeout_add(1000, self.on_timeout)
-
+        if self.running:
+            self.timeout = GLib.timeout_add(1000, self.on_timeout)
 
     def create_menubar(self):
         """
@@ -206,8 +218,11 @@ class TextEditWindow(Gtk.Window):
         self.response = self.input_dialog.run()
 
         if self.response == Gtk.ResponseType.OK:
+            self.textview.set_sensitive(True)
             self.link = self.entry.get_text()
-            # print(self.link)
+            self.crdt = CRDT(self)
+            self.cl = ControlLayer(self.link, self, False, self.crdt)
+            self.cl.daemonize()
         else:
             pass
 
@@ -217,7 +232,7 @@ class TextEditWindow(Gtk.Window):
         """
             Generate a link to share the file
         """
-        link = f"{self.IP}::{hashlib.sha256(self.uuid).hexdigest()}::{self.file_name}"
+        link = f"{self.IP}::{self.port}::{hashlib.sha256(self.uuid).hexdigest()}::{self.file_name}"
 
         return link
 
@@ -231,6 +246,14 @@ class TextEditWindow(Gtk.Window):
         # self.input_dialog.add_buttons(
         #     Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, "OK", Gtk.ResponseType.OK
         # )
+
+        self.crdt = CRDT(self)
+        self.cl = ControlLayer(self.link, self, True, self.crdt)
+        self.cl.daemonize()
+
+        # self.IP = self.cl.host_ip
+        # self.port = self.cl.host_port
+        # self.link = self.generate_link()
 
         box = input_dialog.get_content_area()
         label = Gtk.Label(label="Share this link:")
@@ -248,10 +271,13 @@ class TextEditWindow(Gtk.Window):
 
         input_dialog.destroy()
 
-    def exit_app(self, _):
+    def exit_app(self, *args):
         """
             Exit the application
         """
+        self.running = False
+        if self.cl is not None:
+            self.cl.stop()
         Gtk.main_quit()
 
     def insert_text(self, pos, text):
@@ -261,16 +287,19 @@ class TextEditWindow(Gtk.Window):
         self.textbuffer.insert(self.textbuffer.get_iter_at_offset(pos), text,len(text))
         if pos <= self.last_written:
             self.last_written += len(text)
-        
-        
-        
 
-
-
-
+    def rerender(self, text, cur_pos):
+        """
+            Rerender the text
+        """
+        self.textbuffer.set_text(text)
+        self.textbuffer.place_cursor(self.textbuffer.get_iter_at_offset(cur_pos))
 
 if __name__ == "__main__":
     win = TextEditWindow(None)
-    win.connect("destroy", Gtk.main_quit)
+    win.connect("destroy", win.exit_app)
     win.show_all()
-    Gtk.main()
+    try:
+        Gtk.main()
+    except KeyboardInterrupt:
+        win.exit_app()

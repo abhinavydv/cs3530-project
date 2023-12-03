@@ -75,7 +75,7 @@ class ControlLayer(object):
         """
         s = url.split("::")
         return s[0], int(s[1]), "::".join(s[3:])
-
+    
     def get_peerlist(self):
         """
             returns a json encoded list of peers
@@ -209,9 +209,19 @@ class ControlLayer(object):
         if not self.ishost:
             conn = self.connect_to_host(self.host_ip, self.host_port)
             conn.send_data(self.format_conn(self.server.IP, self.server.port))
-        Thread(target=self.send_dummy_data).start()
+        # Thread(target=self.send_dummy_data).start()
         self.server.start()
+
+    def daemonize(self):
+        """
+            starts the control layer in a new thread
+        """
+        Thread(target=self.start).start()
 
     def stop(self):
         self.server.stop()
+        for conn in self.conns:
+            conn.socket.close()
+        for peer in self.peerlist:
+            peer.skt.socket.close()
         self.running = False

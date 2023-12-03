@@ -61,7 +61,7 @@ class WString:
         output = ''.join(str_list)
 
         return output 
-    
+
     # returns wchar at pos on the ui
     # return None if not there => check 
     def ithVisible(self, pos): # O(n) => ORDERED_TRAVERSAL
@@ -144,7 +144,7 @@ class WString:
         for i in self.S:
             if i.visible:
                 j = j + 1
-            
+
         return j
 
     def at(self, i): # O(1)
@@ -157,14 +157,15 @@ class WString:
             return None
 
         return self.S[i]
-    
+
 class CRDT(object):
 
-    def __init__(self) -> None:
+    def __init__(self, gui) -> None:
         self.S = WString()
-            
+        self.gui = gui
+
     def insert(self, position: int, value: str) -> str: 
-        
+
         global H
         H = H + 1
 
@@ -182,17 +183,20 @@ class CRDT(object):
         if cp is None or cn is None:
             print('Error: GenerateIns: cp/cn is not present') # will happen if position is not valid ?
             return
-        
+
         wchar = Wcharacter((uid, H), value, True, cp.id, cn.id) 
 
         self.IntegrateIns(wchar, cp, cn) 
-        
+
         diff = 'insert: ' + str(wchar)
 
         print(diff)
 
         return diff
     
+    def get_text(self) -> str:
+        return "Hello!!"
+
     def GenerateDel(self, pos):
         wchar = self.S.ithVisible(pos)
         self.IntegrateDel(wchar)
@@ -200,7 +204,6 @@ class CRDT(object):
         return diff
 
     def delete(self, start, end) -> str:
-
         ## assuming start, end are valid
 
         diff_list = []
@@ -214,9 +217,9 @@ class CRDT(object):
         print(diff)
 
         return diff
-    
-    def update():
-        pass
+
+    def update(self, data):
+        self.gui.rerender(data, self.gui.get_cur_pos())
     
     def display(self) -> str:
         return self.text 
@@ -233,7 +236,7 @@ class CRDT(object):
             cni = self.S.pos(cn)
 
             for w in S_prime:
-                if self.S.pos(S.CP(w)) <= cpi and self.S.pos(self.S.CN(w)) >= cni:
+                if self.S.pos(self.S.CP(w)) <= cpi and self.S.pos(self.S.CN(w)) >= cni:
                     L.append(w)
             
             L.append(cn)

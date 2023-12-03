@@ -1,4 +1,4 @@
-from socket import socket, SOL_SOCKET, SO_REUSEADDR
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SHUT_RDWR
 from base.socket_base import Socket
 import errno
 from threading import Thread
@@ -45,15 +45,18 @@ class Server(Socket):
             Accepts connections and starts a new thread for each connection
         """
         while self.running:
-            logging.info("Waiting for connection...")
-            conn, addr = self.socket.accept()
-            logging.info(f"Connection from {addr} accepted")
-            Thread(target=self.control.handle_client, args=(conn, addr)).start()
-            
+            try:
+                logging.info("Waiting for connection...")
+                conn, addr = self.socket.accept()
+                logging.info(f"Connection from {addr} accepted")
+                Thread(target=self.control.handle_client, args=(conn, addr)).start()
+            except OSError as e:
+                pass
+
     def stop(self):
         """
             Stops the server
         """
         self.running = False
-        self.socket.close()
+        self.socket.shutdown(SHUT_RDWR)
         logging.info("Server stopped")
