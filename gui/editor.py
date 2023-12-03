@@ -81,8 +81,20 @@ class TextEditWindow(Gtk.Window):
         cursor_position = self.textbuffer.get_property('cursor-position')
         text = self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_end_iter(), True)
 
+        if Gdk.keyval_name(event.keyval) == 'BackSpace':
+            data = [1,self.last_written,1]
+            self.queue.put(data)
+            self.last_written = cursor_position
+            GLib.source_remove(self.timeout)
+            self.timeout = GLib.timeout_add(1000, self.on_timeout)
+            return 
+        
+        if Gdk.keyval_name(event.keyval) in ['Left','Right','Up','Down']:
+            self.last_written = cursor_position
+            return
+
         if (self.counter > 10):
-            data = [self.last_written,text]
+            data = [0,self.last_written,text]
             self.queue.put(data)
             self.counter = 0 
             self.last_written = cursor_position
@@ -295,8 +307,9 @@ class TextEditWindow(Gtk.Window):
         """
             Rerender the text
         """
-        self.textbuffer.set_text(text)
-        self.textbuffer.place_cursor(self.textbuffer.get_iter_at_offset(cur_pos))
+        string = text[:cur_pos] + self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True) + text[cur_pos:]
+        self.textbuffer.set_text(string)
+        self.textbuffer.place_cursor(self.textbuffer.get_iter_at_offset(cur_pos+self.counter))
 
 if __name__ == "__main__":
     win = TextEditWindow(None)
