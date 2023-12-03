@@ -1,3 +1,5 @@
+from threading import Thread
+
 
 uid = 444 # unique user id for each user within the group (mac/ip addr (within our LAN))
 
@@ -55,13 +57,14 @@ class WString:
 
         str_list = []
         for i in self.S:
+            print(i.cn, i.cp, i.id, i.value, i.visible)
             if i.visible:
                 str_list.append(i.value)
 
         output = ''.join(str_list)
 
         return output 
-    
+
     # returns wchar at pos on the ui
     # return None if not there => check 
     def ithVisible(self, pos): # O(n) => ORDERED_TRAVERSAL
@@ -171,7 +174,7 @@ class CRDT(object):
         self.S = WString()
         self.H = 0 # universal clock
         self.gui = gui
-    
+
     # infeasible inserts => after each update a loop ?
     def insert(self, position: int, value: str) -> str: 
         ## check if works with position 0, check generate ins
@@ -186,6 +189,18 @@ class CRDT(object):
         diff = 'insert\5' + '\8'.join(diff_list)
 
         return diff
+    
+    def daemonise(self):
+        Thread(target=self.run).start()
+
+    def run(self):
+        while True:
+            changes = self.gui.queue.get()
+            print(changes)
+            if (changes[0] == 0):
+                self.insert(changes[1], changes[2])
+            elif (changes[0] == 1):
+                self.delete(changes[1], changes[2])
 
     def GenerateIns(self, position: int, value: str) -> str: 
         
@@ -243,7 +258,7 @@ class CRDT(object):
 
         for i in list_of_deletes:
             wchar_args = list_of_deletes.split('\7')
-            wchar = Wcharacter(wchar_args[0], wchar_args[1], wchar_args[2], wchar_args[3], wchar_args[4]) # get reference with w_id in Wstring
+            wchar = Wcharacter(eval(wchar_args[0]), wchar_args[1], eval(wchar_args[2]), eval(wchar_args[3]), eval(wchar_args[4])) # get reference with w_id in Wstring
             self.IntegrateDel(wchar) # this wont delete 
         
 
@@ -266,7 +281,7 @@ class CRDT(object):
 
         for i in list_of_inserts:
             wchar_args = list_of_inserts.split('\7')
-            wchar = Wcharacter(wchar_args[0], wchar_args[1], wchar_args[2], wchar_args[3], wchar_args[4])
+            wchar = Wcharacter(eval(wchar_args[0]), wchar_args[1], eval(wchar_args[2]), eval(wchar_args[3]), eval(wchar_args[4])) # get reference with w_id in Wstring
             cp = self.S.CP(wchar)
             cn = self.S.CN(wchar)
             self.IntegrateIns(wchar, cp, cn)
@@ -288,9 +303,9 @@ class CRDT(object):
         for i in range(len(wchar_list)):
 
             wchar = wchar_list[i].split('\7')
-            print(wchar)
-            s_updated.append(Wcharacter(wchar[0], wchar[1], wchar[2], wchar[3], wchar[4]))
-        
+            # print(wchar)
+            s_updated.append(Wcharacter(eval(wchar[0]), wchar[1], eval(wchar[2]), eval(wchar[3]), eval(wchar[4])))
+
         self.S.setTotalString(s_updated)
 
         return self.S.noOfVisible()
@@ -312,13 +327,14 @@ class CRDT(object):
             self.gui.rerender(self.display(), new_curpos)
         else:
             print('Error: CRDT::update invalid operation') # exit
-    
+
     def display(self) -> str:
         return self.S.value()
 
     def get_text(self) -> str:
+        print('insertall' + '\5' + str(self.S))
         return 'insertall' + '\5' + str(self.S)
-    
+
     def IntegrateIns(self, c, cp, cn): # O(n^2)
         S_prime  = self.S.subseq(cp, cn) 
 
@@ -331,7 +347,7 @@ class CRDT(object):
             cni = self.S.pos(cn)
 
             for w in S_prime:
-                if self.S.pos(S.CP(w)) <= cpi and self.S.pos(self.S.CN(w)) >= cni:
+                if self.S.pos(self.S.CP(w)) <= cpi and self.S.pos(self.S.CN(w)) >= cni:
                     L.append(w)
             
             L.append(cn)

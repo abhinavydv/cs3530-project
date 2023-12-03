@@ -4,7 +4,7 @@ import hashlib
 from time import sleep
 from queue import Queue
 from control.control_layer import ControlLayer
-from consistency.crdt_v2 import CRDT
+from consistency.crdt_final import CRDT
 import threading
 
 
@@ -221,6 +221,7 @@ class TextEditWindow(Gtk.Window):
             self.textview.set_sensitive(True)
             self.link = self.entry.get_text()
             self.crdt = CRDT(self)
+            self.crdt.daemonise()
             self.cl = ControlLayer(self.link, self, False, self.crdt)
             self.cl.daemonize()
         else:
@@ -248,6 +249,8 @@ class TextEditWindow(Gtk.Window):
         # )
 
         self.crdt = CRDT(self)
+        self.crdt.daemonise()
+        self.crdt.insert(0, self.textbuffer.get_text(self.textbuffer.get_start_iter(), self.textbuffer.get_end_iter(), True))
         self.cl = ControlLayer(self.link, self, True, self.crdt)
         self.cl.daemonize()
 

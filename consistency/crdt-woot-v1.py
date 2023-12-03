@@ -193,7 +193,7 @@ def GenerateDel(pos):
 ## To check if prev conditions satisfied ? => LSEQ didn't need this check
 ## op - string specifying the operation
 def isExecutable(op):
-    
+
     c = op.char
     if op.type == 'del':
         return S.contains(c)
