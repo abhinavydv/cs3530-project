@@ -25,6 +25,9 @@ class CRDT(object):
         diff = Y.encode_state_as_update(self.doc)
         return diff # broadcast
     
+    def update():
+        pass
+    
     def display(self) -> str:
         return self.text # there is some non-determinism .. still need to check
     

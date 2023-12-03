@@ -1,12 +1,3 @@
-## Replace docstrings later ? TESTING LEFT DON'T INTEGRATE
-## WOOT CRDT 
-## check Idempotent proof
-## Reliability needed since it puts off updates if not possible on state => advantage prevents interleaving
-## alternative - LSEQ, Treedoc, LampPort => interleaving => updating a word
-
-## if arrays => replace binary search only a few 100 characters => check how words will scale
-## balanced binary search tree => efficient, order on ids
-
 H = 0 # universal clock
 uid = 444 # unique user id for each user within the group (mac/ip addr (within our LAN))
 
@@ -15,8 +6,23 @@ highest_priority = 10000 ## replace with +inf ? => all uid's should be lesser th
 
 # single character for now => check how words work
 class Wcharacter:
-    def __init__(self, id, val, visible, prev, next): # O(1)
-        self.id = id # a pair (uid, clock) 
+    """
+        single element in the CRDT
+        id: identifier i.e a tuple (uid, clock)
+        value: element value eg. 'a' for a character
+        visible: True/False i.e whether to display the element
+        cp: id of the previous element
+        cn: id of the next element
+    """
+    def __init__(self, id: tuple, val: str, visible: bool, prev: tuple, next: tuple) -> None: # O(1)
+        """
+            id: an identifier i.e a tuple (uid, clock)
+            val: the character/element
+            visible: True if the character should be visible
+            prev: id of the previous element
+            next: id of the next element
+        """
+        self.id = id 
         self.value = val
         self.visible = visible 
         self.cp = prev
@@ -31,6 +37,7 @@ class WString:
         cb = Wcharacter((lowest_priority, -1), 'cb', False, 1, 2)
         ce = Wcharacter((highest_priority, -1), 'ce', False, 1, 2)
         self.S = [cb, ce] # two default cb, ce for beginning and end
+        
     
     def __str__(self):  # O(n) => ORDERED_TRAVERSAL
 
@@ -151,107 +158,90 @@ class WString:
 
         return self.S[i]
     
+class CRDT(object):
 
-## from network
-class operation:
-    def __init__(self, type, wchar):
-        self.type = type
-        self.char = wchar
+    def __init__(self) -> None:
+        self.S = WString()
+            
+    def insert(self, position: int, value: str) -> str: 
+        
+        global H
+        H = H + 1
 
-## Here Ins stands for insert, del for delete
+        ## make sure position is valid
+        if position != 1:
+            cp = self.S.ithVisible(position-1) 
+        else:
+            cp = self.S.at(0) # make sure cb doesn't shift anywhere in IntegrateIns
 
-## pos - position where the character is visible - count from 1 eg: "xyz" pos of y = 2
-## val - character => change to word after PROVE_LINEARITY
-def GenerateIns(pos, val):
-    global H
-    H = H + 1
-    ## make sure pos is valid
-    if pos != 1:
-        cp = S.ithVisible(pos-1) 
-    else:
-        cp = S.at(0) # make sure doesn't shift anywhere in IntegrateIns
+        if position == self.S.noOfVisible()+1:
+            cn = self.S.at(-1) # make sure ce doesn't shift anywhere in IntegrateIns
+        else:
+            cn = self.S.ithVisible(position) 
+
+        if cp is None or cn is None:
+            print('Error: GenerateIns: cp/cn is not present') # will happen if position is not valid ?
+            return
+        
+        wchar = Wcharacter((uid, H), value, True, cp.id, cn.id) 
+
+        self.IntegrateIns(wchar, cp, cn) 
+        
+        diff = 'insert: ' + str(wchar)
+
+        print(diff)
+
+        return diff
     
-    if pos == S.noOfVisible()+1:
-        cn = S.at(-1) # make sure doesn't shift anywhere in IntegrateIns
-    else:
-        cn = S.ithVisible(pos) 
+    def GenerateDel(self, pos):
+        wchar = self.S.ithVisible(pos)
+        self.IntegrateDel(wchar)
+        diff = 'delete: ' + str(wchar) + ';'
+        return diff
 
-    if cp is None or cn is None:
-        print('Error: GenerateIns: cp/cn is not present')
-        return
+    def delete(self, start, end) -> str:
 
-    wchar = Wcharacter((uid, H), val, True, cp.id, cn.id) ## run after cb, ce reserved are added
+        ## assuming start, end are valid
 
-    IntegrateIns(wchar, cp, cn) ## updates on the wstring
-    ## broadcast ins(wchar) => as byte string
+        diff_list = []
 
-def GenerateDel(pos):
-    wchar = S.ithVisible(pos)
-    IntegrateDel(wchar)
-    ## broadcast del(wchar) => as byte string
+        for i in range(end-start+1):
+            s = self.GenerateDel(start) # start is the position of delete
+            diff_list.append(s)
 
-## To check if prev conditions satisfied ? => LSEQ didn't need this check
-## op - string specifying the operation
-def isExecutable(op):
+        diff = ''.join(diff_list)
+
+        print(diff)
+
+        return diff
     
-    c = op.char
-    if op.type == 'del':
-        return S.contains(c)
-    else:
-        return (S.contains(S.CP(c)) and S.contains(S.CN(c)))
+    def update():
+        pass
+    
+    def display(self) -> str:
+        return self.text 
+    
+    def IntegrateIns(self, c, cp, cn): # O(n^2)
+        S_prime  = self.S.subseq(cp, cn) 
 
-# Call on receiving an operation 
-def Reception(op): # O(1)
-    pool.append(op)
+        if len(S_prime) == 0:
+            self.S.insert(c, self.S.pos(cn))
+        else:
+            L = [cp]
 
-def IntegrateDel(wchar): # O(1)
-    wchar.visible = False
+            cpi = self.S.pos(cp)
+            cni = self.S.pos(cn)
 
-def IntegrateIns(c, cp, cn): # O(n^2)
-    S_prime  = S.subseq(cp, cn) 
+            for w in S_prime:
+                if self.S.pos(S.CP(w)) <= cpi and self.S.pos(self.S.CN(w)) >= cni:
+                    L.append(w)
+            
+            L.append(cn)
+            
+            i = 1 
 
-    if len(S_prime) == 0:
-        S.insert(c, S.pos(cn))
-    else:
-        L = [cp]
+            while (i < len(L)-1) and (L[i].id < c.id):
+                i = i+1
+            
+            self.IntegrateIns(c, L[i-1], L[i])
 
-        cpi = S.pos(cp)
-        cni = S.pos(cn)
-
-        for w in S_prime:
-            if S.pos(S.CP(w)) <= cpi and S.pos(S.CN(w)) >= cni:
-                L.append(w)
-        
-        L.append(cn)
-        
-        i = 1 
-
-        while (i < len(L)-1) and (L[i].id < c.id):
-            i = i+1
-        
-        IntegrateIns(c, L[i-1], L[i])
-
-
-S = WString() 
-pool = [] 
-
-print(S.value())
-print(S)
-
-GenerateIns(1, 'a')
-print(S.value())
-# print(S)
-
-
-GenerateIns(2, 'b')
-print(S.value())
-# print(S)
-
-
-GenerateIns(2, '1')
-print(S.value())
-# print(S)
-
-GenerateIns(2, '3')
-print(S.value())
-# print(S)
