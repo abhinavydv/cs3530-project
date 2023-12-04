@@ -134,11 +134,6 @@ class WString:
 
         ci = self.pos(c)
         di = self.pos(d)
-        print('c: ', c, 'd: ', d)
-        print(self)
-        print(ci, di)
-
-        print('subseq: ', self)
         
         if ci is None or di is None:
             print('Error: WString::subseq: c/d not present in WString')
@@ -216,7 +211,6 @@ class CRDT(object):
         while True:
             changes = self.gui.queue.get()
             # print(changes)
-            print('run: ', changes)
             if (changes[0] == 0):
                 self.insert(changes[1], changes[2])
             elif (changes[0] == 1):
@@ -232,14 +226,14 @@ class CRDT(object):
         else:
             cp = self.S.at(0) # make sure cb doesn't shift anywhere in IntegrateIns
 
-        print('GenerateIns no of visible: ', self.S.noOfVisible(), self.display())
+        # print('GenerateIns no of visible: ', self.S.noOfVisible(), self.display())
 
         if position == self.S.noOfVisible():
             cn = self.S.at(-1) # make sure ce doesn't shift anywhere in IntegrateIns
         else:
             cn = self.S.ithVisible(position) 
 
-        print('GenerateIns: ', cp, cn)
+        # print('GenerateIns: ', cp, cn)
 
         if cp is None or cn is None:
             print('Error: GenerateIns: cp/cn is not present') # will happen if position is not valid ?
@@ -254,8 +248,8 @@ class CRDT(object):
 
     def GenerateDel(self, pos):
         wchar = self.S.ithVisible(pos)
-        print("wchar1: ", wchar)
-        print(self.S)
+        # print("wchar1: ", wchar)
+        # print(self.S)
         self.IntegrateDel(wchar)
         diff = str(wchar)
         return diff
@@ -281,19 +275,19 @@ class CRDT(object):
         cur_pos = self.gui.get_cur_pos()
         wchar_pointed = self.S.ithVisible(cur_pos-1)
 
-        print('cur_pos:', cur_pos)
+        # print('cur_pos:', cur_pos)
         if cur_pos > self.S.noOfVisible():
             print('Error: CRDT::updateInsert: cur_pos is out of range')
             return cur_pos 
 
         for i in list_of_deletes:
-            print('i1', i)
+            # print('i1', i)
             wchar_args = i.split('\7')
             wchar = Wcharacter(eval(wchar_args[0]), wchar_args[1], eval(wchar_args[2]), eval(wchar_args[3]), eval(wchar_args[4])) # get reference with w_id in Wstring
-            print('i2', i)
+            # print('i2', i)
 
             self.IntegrateDel(self.S.S[self.S.pos(wchar)]) # check delete updates
-            print('i3', i)
+            # print('i3', i)
 
         j = 0
         for i in range(len(self.S.S)):
@@ -317,8 +311,8 @@ class CRDT(object):
 
         wchar_pointed = self.S.ithVisible(cur_pos)
 
-        print('cur_pos', cur_pos)
-        print('WCHAR', wchar_pointed) 
+        # print('cur_pos', cur_pos)
+        # print('WCHAR', wchar_pointed) 
 
         for i in list_of_inserts:
             wchar_args = i.split('\7')
@@ -354,7 +348,7 @@ class CRDT(object):
 
     def update(self, diff: str):
 
-        print('update: ', diff)
+        # print('update: ', diff)
 
         cursor_pos = self.gui.get_cur_pos() 
 
@@ -372,25 +366,25 @@ class CRDT(object):
         else:
             print('Error: CRDT::update invalid operation') # exit
 
-        print('update-end:')
+        # print('update-end:')
 
     def display(self) -> str:
         return self.S.value()
 
     def get_text(self) -> str:
-        print('get_text: ')
+        # print('get_text: ')
         return 'insertall' + '\5' + str(self.S)
 
     def IntegrateIns(self, c, cp, cn): # O(n^2)
         S_prime  = self.S.subseq(cp, cn) 
-        print('IntegrateIns: ', c, cp, cn)
+        # print('IntegrateIns: ', c, cp, cn)
         
-        print('S_prime: ')
+        # print('S_prime: ')
         
-        for i in S_prime:
-            print(i)
+        # for i in S_prime:
+        #     print(i)
         
-        print('S_prime-end: ')
+        # print('S_prime-end: ')
         
 
         if len(S_prime) == 0:

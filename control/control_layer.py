@@ -16,7 +16,7 @@ class DummyCRDT(object):
 
         def update(self, data: str):
             self.text = data
-            print(self.text)
+            # print(self.text)
             # cur_pos = self.gui.get_cur_pos()
 
         def get_text(self) -> str:
@@ -102,7 +102,7 @@ class ControlLayer(object):
             sends `data` to all connections
         """
         failed = self.server.send_to_all(data, self.conns)
-        print("failed", failed)
+        # print("failed", failed)
 
         # remove failed peers
         with self.conns_lock:
@@ -134,9 +134,9 @@ class ControlLayer(object):
         conn.send_data(self.format_edit(text))
 
     def action_edit(self, d: Data):
-        print("edit", d.headers["payload"])
+        # print("edit", d.headers["payload"])
         self.crdt.update(d.headers["payload"])
-        print("updated:")
+        # print("updated:")
 
     def connect_to_host(self, IP, port):
         conn = Socket(IP=IP, port=port)
@@ -170,9 +170,9 @@ class ControlLayer(object):
         """
             handles data received from a peer
         """
-        print('data received', skt.socket)
+        # print('data received', skt.socket)
         d = Data(data)
-        print(d.headers)
+        # print(d.headers)
         if d.headers["action"] == "peerlist":
             self.action_peerlist(d)
 
@@ -197,8 +197,10 @@ class ControlLayer(object):
                 if data == b"":
                     break
                 self.data_received(data, conn)
-        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError) as e:
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError) as e:
             logging.info(f"error: {e.strerror}")
+        except KeyboardInterrupt:
+            pass
         logging.info(f"Connection from {addr} closed")
 
     def send_edit(self, data: str):

@@ -121,7 +121,7 @@ class TextEditWindow(Gtk.Window):
         print(Gdk.keyval_to_unicode(event.keyval))
         if Gdk.keyval_to_unicode(event.keyval) in self.printable + [ord(i) for i in ' \n\t']:
             self.counter += 1
-        if (self.counter > 2):
+        if (self.counter > 6):
             # text = self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True)
             # data = [0,self.last_written,text]
             # print("putting data 2")
