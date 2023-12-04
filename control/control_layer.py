@@ -101,6 +101,7 @@ class ControlLayer(object):
         """
             sends `data` to all connections
         """
+        print(self.peerlist)
         failed = self.server.send_to_all(data, self.conns)
         # print("failed", failed)
 
