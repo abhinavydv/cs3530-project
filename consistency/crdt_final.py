@@ -1,10 +1,10 @@
 from threading import Thread
-
+import math
 
 uid = 444 # unique user id for each user within the group (mac/ip addr (within our LAN))
 
 lowest_priority = -1 ## replace with -inf ?
-highest_priority = 10000 ## replace with +inf ? => all uid's should be lesser than this
+highest_priority =  1e40 ## replace with +inf ? => all uid's should be lesser than this
 
 
 
@@ -94,7 +94,7 @@ class WString:
         return False
 
     def CP(self, wchar): # O(n) => ORDERED_TRAVERSAL
-
+        
         for w in self.S:
             if w.id == wchar.cp:
                 return w
@@ -134,18 +134,23 @@ class WString:
 
         ci = self.pos(c)
         di = self.pos(d)
+        print('c: ', c, 'd: ', d)
+        print(self)
+        print(ci, di)
 
+        print('subseq: ', self)
+        
         if ci is None or di is None:
             print('Error: WString::subseq: c/d not present in WString')
             return None
-
+        
         return self.S[ci+1:di]
 
     ## returns the no of visible chars
     def noOfVisible(self): # O(n)
 
         j = 0
-        for i in self.S:
+        for ind, i in enumerate(self.S):
             if i.visible:
                 j = j + 1
 
@@ -169,11 +174,11 @@ class WString:
 
 class CRDT(object):
 
-    def __init__(self, gui, uid) -> None:
+    def __init__(self, gui) -> None:
         self.S = WString()
         self.H = 0 # universal clock
         self.gui = gui
-        self.uid = uid
+        self.uid = None
 
     def isExecutable(self, op : int, c : Wcharacter) -> bool:
         """
@@ -249,6 +254,8 @@ class CRDT(object):
 
     def GenerateDel(self, pos):
         wchar = self.S.ithVisible(pos)
+        print("wchar1: ", wchar)
+        print(self.S)
         self.IntegrateDel(wchar)
         diff = str(wchar)
         return diff
@@ -259,29 +266,37 @@ class CRDT(object):
 
         diff_list = []
 
-        for i in range(end-start+1):
+        for i in range(end-start):
             s = self.GenerateDel(start) # start is the position of delete
             diff_list.append(s)
 
         diff = '\8'.join(diff_list)
         diff = 'delete'+ '\5' + diff
+        self.gui.cl.send_edit(diff)
 
         return diff
     
     def updateDelete(self, diff :str) -> int:
-        list_of_deletes = diff.spit('\8')
+        list_of_deletes = diff.split('\8')
         cur_pos = self.gui.get_cur_pos()
-        wchar_pointed = self.S.ithVisible(cur_pos)
+        wchar_pointed = self.S.ithVisible(cur_pos-1)
 
+        print('cur_pos:', cur_pos)
+        if cur_pos > self.S.noOfVisible():
+            print('Error: CRDT::updateInsert: cur_pos is out of range')
+            return cur_pos 
 
         for i in list_of_deletes:
+            print('i1', i)
             wchar_args = i.split('\7')
             wchar = Wcharacter(eval(wchar_args[0]), wchar_args[1], eval(wchar_args[2]), eval(wchar_args[3]), eval(wchar_args[4])) # get reference with w_id in Wstring
+            print('i2', i)
+
             self.IntegrateDel(self.S.S[self.S.pos(wchar)]) # check delete updates
-        
+            print('i3', i)
 
         j = 0
-        for i in range(len(self.S)):
+        for i in range(len(self.S.S)):
             if self.S.S[i].visible:
                 j = j + 1
 
@@ -299,7 +314,7 @@ class CRDT(object):
         if cur_pos > self.S.noOfVisible():
             print('Error: CRDT::updateInsert: cur_pos is out of range')
             return cur_pos 
-               
+
         wchar_pointed = self.S.ithVisible(cur_pos)
 
         print('cur_pos', cur_pos)
@@ -310,8 +325,9 @@ class CRDT(object):
             wchar = Wcharacter(eval(wchar_args[0]), wchar_args[1], eval(wchar_args[2]), eval(wchar_args[3]), eval(wchar_args[4])) # get reference with w_id in Wstring
             cp = self.S.CP(wchar)
             cn = self.S.CN(wchar)
-
+            # print('wchar2: ', wchar, "cp: ", cp, "cn: ", cn)
             self.IntegrateIns(wchar, cp, cn)
+            # print('wchar3: ', wchar, "cp: ", cp, "cn: ", cn)
 
         if wchar_pointed is not None:
             i = 0
@@ -367,6 +383,15 @@ class CRDT(object):
 
     def IntegrateIns(self, c, cp, cn): # O(n^2)
         S_prime  = self.S.subseq(cp, cn) 
+        print('IntegrateIns: ', c, cp, cn)
+        
+        print('S_prime: ')
+        
+        for i in S_prime:
+            print(i)
+        
+        print('S_prime-end: ')
+        
 
         if len(S_prime) == 0:
             self.S.insert(c, self.S.pos(cn))
@@ -379,20 +404,21 @@ class CRDT(object):
             for w in S_prime:
                 if self.S.pos(self.S.CP(w)) <= cpi and self.S.pos(self.S.CN(w)) >= cni:
                     L.append(w)
-            
+
             L.append(cn)
-            
-            i = 1 
+
+            i = 1
+            lc[0] += 1
 
             while (i < len(L)-1) and (L[i].id < c.id):
                 i = i+1
             
             self.IntegrateIns(c, L[i-1], L[i])
 
-    def IntegrateDel(wchar): # O(1)
+    def IntegrateDel(self, wchar): # O(1)
         wchar.visible = False
         
-
+lc = [0]
     
 # c1 = CRDT(None)
 # c2 = CRDT(None)

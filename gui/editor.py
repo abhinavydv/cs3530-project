@@ -25,15 +25,19 @@ class TextEditWindow(Gtk.Window):
         self.uuid = uuid.getnode().to_bytes(6, "little")
         self.crdt = None
         self.cl = None
-        self.timeout = GLib.timeout_add(1000, self.on_timeout)
         self.counter = 0
         self.IP = self.getIP()
         self.port = 11419
         self.queue = Queue()
+        self.update_queue = Queue()
         self.last_written = 0
+
+        self.mouse_clicked = False
 
         self.last_cursor_pos = 0
 
+        self.timeout = GLib.timeout_add(1000, self.on_timeout)
+        self.queue_timeout = GLib.timeout_add(100, self.on_queue_timeout)
         self.set_default_size(650, 350)
         self.grid = Gtk.Grid()
 
@@ -41,7 +45,7 @@ class TextEditWindow(Gtk.Window):
 
         self.create_menubar()
         self.create_textview()
-        
+
         self.printable = list(map(ord, string.printable))
 
     def getIP(self):
@@ -85,22 +89,27 @@ class TextEditWindow(Gtk.Window):
     def on_mouse_button_press(self, widget, event):
         print("mouse button pressed")
         self.on_timeout()
+        self.mouse_clicked = True
         self.last_written = self.textbuffer.get_property('cursor-position')
         print(self.last_written)
 
     def on_key_press_event(self,widget,event,*args):
+        # if self.mouse_clicked:
+        #     self.mouse_clicked = False
+        #     self.last_written = self.textbuffer.get_property('cursor-position')
+
         cursor_position = self.textbuffer.get_property('cursor-position')
         # self.counter = cursor_position - self.last_written
 
         if Gdk.keyval_name(event.keyval) == 'BackSpace':
             self.on_timeout()
-            data = [1,self.last_written-1,1]
+            data = [1, self.last_written-1, self.last_written]
             print("putting data 1")
             self.queue.put(data)
             # self.last_written = cursor_position
-            self.last_written += self.counter
+            self.last_written -= 1
             GLib.source_remove(self.timeout)
-            self.timeout = GLib.timeout_add(1000, self.on_timeout)
+            self.timeout = GLib.timeout_add(100, self.on_timeout)
             return 
 
         if Gdk.keyval_name(event.keyval) in ['Left','Right','Up','Down']:
@@ -112,7 +121,7 @@ class TextEditWindow(Gtk.Window):
         print(Gdk.keyval_to_unicode(event.keyval))
         if Gdk.keyval_to_unicode(event.keyval) in self.printable + [ord(i) for i in ' \n\t']:
             self.counter += 1
-        if (self.counter > 10):
+        if (self.counter > 2):
             # text = self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True)
             # data = [0,self.last_written,text]
             # print("putting data 2")
@@ -140,7 +149,14 @@ class TextEditWindow(Gtk.Window):
 
         GLib.source_remove(self.timeout)
         if self.running:
-            self.timeout = GLib.timeout_add(1000, self.on_timeout)
+            self.timeout = GLib.timeout_add(100, self.on_timeout)
+
+    def on_queue_timeout(self):
+        if not self.update_queue.empty():
+            self.update_text(*self.update_queue.get())
+        GLib.source_remove(self.queue_timeout)
+        if self.running:
+            self.queue_timeout = GLib.timeout_add(100, self.on_queue_timeout)
 
     def create_menubar(self):
         """
@@ -259,8 +275,9 @@ class TextEditWindow(Gtk.Window):
         if self.response == Gtk.ResponseType.OK:
             self.textview.set_sensitive(True)
             self.link = self.entry.get_text()
-            self.crdt = CRDT(self, self.gen_uid())
+            self.crdt = CRDT(self)
             self.cl = ControlLayer(self.link, self, False, self.crdt)
+            self.crdt.uid = self.gen_uid()
             self.crdt.daemonise()
             self.cl.daemonize()
         else:
@@ -269,7 +286,7 @@ class TextEditWindow(Gtk.Window):
         self.input_dialog.destroy()
 
     def gen_uid(self):
-        return int.from_bytes(self.IP.encode(), "little") * self.port
+        return int.from_bytes(self.cl.server.IP.encode(), "little") * self.cl.server.port
 
     def generate_link(self):
         """
@@ -290,9 +307,10 @@ class TextEditWindow(Gtk.Window):
         #     Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, "OK", Gtk.ResponseType.OK
         # )
 
-        self.crdt = CRDT(self, self.gen_uid())
+        self.crdt = CRDT(self)
         # self.crdt.insert(0, self.textbuffer.get_text(self.textbuffer.get_start_iter(), self.textbuffer.get_end_iter(), True))
         self.cl = ControlLayer(self.link, self, True, self.crdt)
+        self.crdt.uid = self.gen_uid()
         self.cl.daemonize()
         self.crdt.daemonise()
 
@@ -333,13 +351,20 @@ class TextEditWindow(Gtk.Window):
         if pos <= self.last_written:
             self.last_written += len(text)
 
+    def update_text(self, text, cur_pos):
+        string = text[:cur_pos] + self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True) + text[cur_pos:]
+        self.textbuffer.set_text(string)
+        self.last_written = cur_pos
+        self.textbuffer.place_cursor(self.textbuffer.get_iter_at_offset(cur_pos+self.counter))
+
     def rerender(self, text, cur_pos):
         """
             Rerender the text
         """
-        string = text[:cur_pos] + self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True) + text[cur_pos:]
-        self.textbuffer.set_text(string)
-        self.textbuffer.place_cursor(self.textbuffer.get_iter_at_offset(cur_pos+self.counter))
+        self.update_queue.put([text, cur_pos])
+        # string = text[:cur_pos] + self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True) + text[cur_pos:]
+        # self.textbuffer.set_text(string)
+        # self.textbuffer.place_cursor(self.textbuffer.get_iter_at_offset(cur_pos+self.counter))
 
 if __name__ == "__main__":
     win = TextEditWindow(None)

@@ -136,6 +136,7 @@ class ControlLayer(object):
     def action_edit(self, d: Data):
         print("edit", d.headers["payload"])
         self.crdt.update(d.headers["payload"])
+        print("updated:")
 
     def connect_to_host(self, IP, port):
         conn = Socket(IP=IP, port=port)
