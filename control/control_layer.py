@@ -134,6 +134,7 @@ class ControlLayer(object):
         conn.send_data(self.format_edit(text))
 
     def action_edit(self, d: Data):
+        print("edit", d.headers["payload"])
         self.crdt.update(d.headers["payload"])
 
     def connect_to_host(self, IP, port):
@@ -168,7 +169,9 @@ class ControlLayer(object):
         """
             handles data received from a peer
         """
+        print('data received', skt.socket)
         d = Data(data)
+        print(d.headers)
         if d.headers["action"] == "peerlist":
             self.action_peerlist(d)
 
@@ -196,6 +199,12 @@ class ControlLayer(object):
         except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError) as e:
             logging.info(f"error: {e.strerror}")
         logging.info(f"Connection from {addr} closed")
+
+    def send_edit(self, data: str):
+        """
+            sends the edit to all peers
+        """
+        self.send_to_all(self.format_edit(data))
 
     def send_dummy_data(self):
         while self.running:

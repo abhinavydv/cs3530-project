@@ -5,7 +5,7 @@ from time import sleep
 from queue import Queue
 from control.control_layer import ControlLayer
 from consistency.crdt_final import CRDT
-import threading
+import string
 
 
 gi.require_version("Gtk", "3.0")
@@ -32,6 +32,8 @@ class TextEditWindow(Gtk.Window):
         self.queue = Queue()
         self.last_written = 0
 
+        self.last_cursor_pos = 0
+
         self.set_default_size(650, 350)
         self.grid = Gtk.Grid()
 
@@ -39,6 +41,8 @@ class TextEditWindow(Gtk.Window):
 
         self.create_menubar()
         self.create_textview()
+        
+        self.printable = list(map(ord, string.printable))
 
     def getIP(self):
         """
@@ -67,6 +71,7 @@ class TextEditWindow(Gtk.Window):
 
         self.textview = Gtk.TextView()
         self.textview.connect("key-release-event", self.on_key_press_event)
+        self.textview.connect("button-press-event", self.on_mouse_button_press)
 
         self.textview.set_wrap_mode(Gtk.WrapMode.WORD)
         self.textview.set_sensitive(False)
@@ -77,39 +82,61 @@ class TextEditWindow(Gtk.Window):
 
         sw.add(self.textview)
 
+    def on_mouse_button_press(self, widget, event):
+        print("mouse button pressed")
+        self.on_timeout()
+        self.last_written = self.textbuffer.get_property('cursor-position')
+        print(self.last_written)
+
     def on_key_press_event(self,widget,event,*args):
         cursor_position = self.textbuffer.get_property('cursor-position')
-        text = self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_end_iter(), True)
+        # self.counter = cursor_position - self.last_written
 
         if Gdk.keyval_name(event.keyval) == 'BackSpace':
-            data = [1,self.last_written,1]
+            self.on_timeout()
+            data = [1,self.last_written-1,1]
+            print("putting data 1")
             self.queue.put(data)
-            self.last_written = cursor_position
+            # self.last_written = cursor_position
+            self.last_written += self.counter
             GLib.source_remove(self.timeout)
             self.timeout = GLib.timeout_add(1000, self.on_timeout)
             return 
-        
+
         if Gdk.keyval_name(event.keyval) in ['Left','Right','Up','Down']:
+            self.on_timeout()
             self.last_written = cursor_position
             return
 
+        print("key: ", Gdk.keyval_name(event.keyval))
+        print(Gdk.keyval_to_unicode(event.keyval))
+        if Gdk.keyval_to_unicode(event.keyval) in self.printable + [ord(i) for i in ' \n\t']:
+            self.counter += 1
         if (self.counter > 10):
-            data = [0,self.last_written,text]
-            self.queue.put(data)
-            self.counter = 0 
-            self.last_written = cursor_position
-            GLib.source_remove(self.timeout)
-            self.timeout = GLib.timeout_add(1000, self.on_timeout)
+            # text = self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True)
+            # data = [0,self.last_written,text]
+            # print("putting data 2")
+            # self.queue.put(data)
+            # self.last_written += self.counter
+            # # self.last_written = cursor_position
+            # self.counter = 0
+            # GLib.source_remove(self.timeout)
+            # self.timeout = GLib.timeout_add(1000, self.on_timeout)
+            self.on_timeout()
             return
 
-        self.counter += 1
 
-    def on_timeout(self):
-        data = [self.last_written,self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_end_iter(), True)]
-        if (data[1] != ""):
+    def on_timeout(self, data=None):
+        if data is None:
+            text = self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True)
+            data = [0, self.last_written, text]
+        # data = [0, self.last_written,self.textbuffer.get_text(self.textbuffer.get_iter_at_offset(self.last_written), self.textbuffer.get_iter_at_offset(self.last_written+self.counter), True)]
+        if (data[2] != ""):
+            print("putting data 3")
             self.queue.put(data)
+        self.last_written += self.counter
+        # self.last_written = self.textbuffer.get_property('cursor-position')
         self.counter = 0
-        self.last_written = self.textbuffer.get_property('cursor-position')
 
         GLib.source_remove(self.timeout)
         if self.running:
@@ -232,14 +259,17 @@ class TextEditWindow(Gtk.Window):
         if self.response == Gtk.ResponseType.OK:
             self.textview.set_sensitive(True)
             self.link = self.entry.get_text()
-            self.crdt = CRDT(self)
-            self.crdt.daemonise()
+            self.crdt = CRDT(self, self.gen_uid())
             self.cl = ControlLayer(self.link, self, False, self.crdt)
+            self.crdt.daemonise()
             self.cl.daemonize()
         else:
             pass
 
         self.input_dialog.destroy()
+
+    def gen_uid(self):
+        return int.from_bytes(self.IP.encode(), "little") * self.port
 
     def generate_link(self):
         """
@@ -260,11 +290,11 @@ class TextEditWindow(Gtk.Window):
         #     Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, "OK", Gtk.ResponseType.OK
         # )
 
-        self.crdt = CRDT(self)
-        self.crdt.daemonise()
-        self.crdt.insert(0, self.textbuffer.get_text(self.textbuffer.get_start_iter(), self.textbuffer.get_end_iter(), True))
+        self.crdt = CRDT(self, self.gen_uid())
+        # self.crdt.insert(0, self.textbuffer.get_text(self.textbuffer.get_start_iter(), self.textbuffer.get_end_iter(), True))
         self.cl = ControlLayer(self.link, self, True, self.crdt)
         self.cl.daemonize()
+        self.crdt.daemonise()
 
         # self.IP = self.cl.host_ip
         # self.port = self.cl.host_port

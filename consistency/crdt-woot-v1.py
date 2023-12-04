@@ -190,14 +190,18 @@ def GenerateDel(pos):
     IntegrateDel(wchar)
     ## broadcast del(wchar) => as byte string
 
-## To check if prev conditions satisfied ? => LSEQ didn't need this check
-## op - string specifying the operation
-def isExecutable(op):
-
-    c = op.char
-    if op.type == 'del':
+def isExecutable(op : int, c : Wcharacter) -> bool:
+    """
+    0 insert
+    1 delete
+    c is the wcharacter to be inserted/deleted
+    
+    checks if prev conditions satisfied 
+    """
+    
+    if op == 1:
         return S.contains(c)
-    else:
+    elif op == 0:
         return (S.contains(S.CP(c)) and S.contains(S.CN(c)))
 
 # Call on receiving an operation 

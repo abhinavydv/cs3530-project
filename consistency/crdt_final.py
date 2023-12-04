@@ -6,6 +6,9 @@ uid = 444 # unique user id for each user within the group (mac/ip addr (within o
 lowest_priority = -1 ## replace with -inf ?
 highest_priority = 10000 ## replace with +inf ? => all uid's should be lesser than this
 
+
+
+
 # single character for now => check how words work
 class Wcharacter:
     """
@@ -37,8 +40,8 @@ class Wcharacter:
 class WString:
 
     def __init__(self): # O(1)
-        cb = Wcharacter((lowest_priority, -1), 'cb', False, 1, 2)
-        ce = Wcharacter((highest_priority, -1), 'ce', False, 1, 2)
+        cb = Wcharacter((lowest_priority, -1), 'cb', False, (-11, 2), (1, 2))
+        ce = Wcharacter((highest_priority, -1), 'ce', False, (1, 2), (1, 2))
         self.S = [cb, ce] # two default cb, ce for beginning and end
         
     def __str__(self):  # O(n) => ORDERED_TRAVERSAL
@@ -49,7 +52,7 @@ class WString:
             str_list.append(str(i))
         
         output = '\0'.join(str_list)
-
+        
         return output
 
     # Returns the visible string 
@@ -57,7 +60,6 @@ class WString:
 
         str_list = []
         for i in self.S:
-            print(i.cn, i.cp, i.id, i.value, i.visible)
             if i.visible:
                 str_list.append(i.value)
 
@@ -74,7 +76,7 @@ class WString:
             if i.visible:
                 j = j + 1
             
-            if j == pos:
+            if j-1 == pos:
                 return i
 
         return None
@@ -113,9 +115,9 @@ class WString:
         for i in range(0, len(self.S)):
             if wchar.id == self.S[i].id:
                 return i
-        
+
         return None # Not found in the list
-    
+
     ## inserts wchar in index p
     def insert(self, wchar, p): # O(n) 
 
@@ -141,13 +143,12 @@ class WString:
 
     ## returns the no of visible chars
     def noOfVisible(self): # O(n)
-        
-        j = 0
 
+        j = 0
         for i in self.S:
             if i.visible:
                 j = j + 1
-            
+
         return j
 
     def at(self, i): # O(1)
@@ -164,71 +165,88 @@ class WString:
     def setTotalString(self, s_new):
         self.S = s_new
 
-class gui():
-    def rerender(a, b):
-        pass
+
 
 class CRDT(object):
 
-    def __init__(self, gui) -> None:
+    def __init__(self, gui, uid) -> None:
         self.S = WString()
         self.H = 0 # universal clock
         self.gui = gui
+        self.uid = uid
+
+    def isExecutable(self, op : int, c : Wcharacter) -> bool:
+        """
+        0 insert
+        1 delete
+        c is the wcharacter to be inserted/deleted
+        
+        checks if prev conditions satisfied 
+        """
+    
+        if op == 1:
+            return self.S.contains(c)
+        elif op == 0:
+            return (self.S.contains(self.S.CP(c)) and self.S.contains(self.S.CN(c)))
 
     # infeasible inserts => after each update a loop ?
     def insert(self, position: int, value: str) -> str: 
-        ## check if works with position 0, check generate ins
-        position = position + 1
-
         diff_list = []
-
+        # print('insert-begin: ', position, value)
         for i in range(len(value)):
             diff_list.append(self.GenerateIns(position, value[i]))
             position = position + 1
-        
+
         diff = 'insert\5' + '\8'.join(diff_list)
 
+        # print('insert-end: ', self.S)
+        self.gui.cl.send_edit(diff)
+
         return diff
-    
+
     def daemonise(self):
         Thread(target=self.run).start()
 
     def run(self):
         while True:
             changes = self.gui.queue.get()
-            print(changes)
+            # print(changes)
+            print('run: ', changes)
             if (changes[0] == 0):
                 self.insert(changes[1], changes[2])
             elif (changes[0] == 1):
                 self.delete(changes[1], changes[2])
 
     def GenerateIns(self, position: int, value: str) -> str: 
-        
+
         self.H = self.H + 1
 
         ## make sure position is valid
-        if position != 1:
+        if position != 0:
             cp = self.S.ithVisible(position-1) 
         else:
             cp = self.S.at(0) # make sure cb doesn't shift anywhere in IntegrateIns
 
-        if position == self.S.noOfVisible()+1:
+        print('GenerateIns no of visible: ', self.S.noOfVisible(), self.display())
+
+        if position == self.S.noOfVisible():
             cn = self.S.at(-1) # make sure ce doesn't shift anywhere in IntegrateIns
         else:
             cn = self.S.ithVisible(position) 
 
+        print('GenerateIns: ', cp, cn)
+
         if cp is None or cn is None:
             print('Error: GenerateIns: cp/cn is not present') # will happen if position is not valid ?
             return
-        
-        wchar = Wcharacter((uid, self.H), value, True, cp.id, cn.id) 
 
+        wchar = Wcharacter((self.uid, self.H), value, True, cp.id, cn.id) 
         self.IntegrateIns(wchar, cp, cn) 
-        
+
         diff = str(wchar)
 
         return diff
-    
+
     def GenerateDel(self, pos):
         wchar = self.S.ithVisible(pos)
         self.IntegrateDel(wchar)
@@ -257,17 +275,17 @@ class CRDT(object):
 
 
         for i in list_of_deletes:
-            wchar_args = list_of_deletes.split('\7')
+            wchar_args = i.split('\7')
             wchar = Wcharacter(eval(wchar_args[0]), wchar_args[1], eval(wchar_args[2]), eval(wchar_args[3]), eval(wchar_args[4])) # get reference with w_id in Wstring
-            self.IntegrateDel(wchar) # this wont delete 
+            self.IntegrateDel(self.S.S[self.S.pos(wchar)]) # check delete updates
         
 
         j = 0
         for i in range(len(self.S)):
-            if self.S[i].visible:
+            if self.S.S[i].visible:
                 j = j + 1
 
-            if self.S[i].id == wchar_pointed.id:
+            if self.S.S[i].id == wchar_pointed.id:
                 j = j + 1 # should this be included 
                 break
 
@@ -277,24 +295,34 @@ class CRDT(object):
 
         list_of_inserts = diff.split('\8')
         cur_pos = self.gui.get_cur_pos()
+        
+        if cur_pos > self.S.noOfVisible():
+            print('Error: CRDT::updateInsert: cur_pos is out of range')
+            return cur_pos 
+               
         wchar_pointed = self.S.ithVisible(cur_pos)
 
+        print('cur_pos', cur_pos)
+        print('WCHAR', wchar_pointed) 
+
         for i in list_of_inserts:
-            wchar_args = list_of_inserts.split('\7')
+            wchar_args = i.split('\7')
             wchar = Wcharacter(eval(wchar_args[0]), wchar_args[1], eval(wchar_args[2]), eval(wchar_args[3]), eval(wchar_args[4])) # get reference with w_id in Wstring
             cp = self.S.CP(wchar)
             cn = self.S.CN(wchar)
+
             self.IntegrateIns(wchar, cp, cn)
 
-        i = 0
-        while i < self.S.noOfVisible():
-            if self.S[i].visible:
-                i = i + 1
-            if self.S[i].id == wchar_pointed.id:
-                return i
-            
-        return i # goes to the end check        
-    
+        if wchar_pointed is not None:
+            i = 0
+            while i < self.S.noOfVisible():
+                if self.S.S[i].visible:
+                    i = i + 1
+                if self.S.S[i].id == wchar_pointed.id:
+                    return i
+        else:
+            return self.S.noOfVisible() # if it was at the end shifting to the end
+
     def updateInsertAll(self, wchar_str: str) -> int:
         wchar_list = wchar_str.split('\0')
 
@@ -303,16 +331,16 @@ class CRDT(object):
         for i in range(len(wchar_list)):
 
             wchar = wchar_list[i].split('\7')
-            # print(wchar)
             s_updated.append(Wcharacter(eval(wchar[0]), wchar[1], eval(wchar[2]), eval(wchar[3]), eval(wchar[4])))
 
         self.S.setTotalString(s_updated)
-
         return self.S.noOfVisible()
 
     def update(self, diff: str):
 
-        # cursor_pos = self.gui.get_cur_pos() 
+        print('update: ', diff)
+
+        cursor_pos = self.gui.get_cur_pos() 
 
         list = diff.split('\5') # assuming diff is proper
 
@@ -328,11 +356,13 @@ class CRDT(object):
         else:
             print('Error: CRDT::update invalid operation') # exit
 
+        print('update-end:')
+
     def display(self) -> str:
         return self.S.value()
 
     def get_text(self) -> str:
-        print('insertall' + '\5' + str(self.S))
+        print('get_text: ')
         return 'insertall' + '\5' + str(self.S)
 
     def IntegrateIns(self, c, cp, cn): # O(n^2)
@@ -361,3 +391,25 @@ class CRDT(object):
 
     def IntegrateDel(wchar): # O(1)
         wchar.visible = False
+        
+
+    
+# c1 = CRDT(None)
+# c2 = CRDT(None)
+# uid = 23
+# d = c1.insert(0, 'kl')
+# print(c2.display())
+
+# uid = 444
+# c2.update(c1.get_text())
+
+# uid = 23
+# d = c1.insert(0, 'abc')
+# uid = 444
+# c2.update(d)
+# print(c1.display())
+# print(c2.display())
+
+
+
+
